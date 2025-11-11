@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HardwarePlanner</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-pattern"></div>
+    
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div class="header-icon">
+                    <i class="fas fa-desktop"></i>
+                </div>
+                <div class="header-controls">
+                    <button id="theme-toggle" class="control-btn" title="Toggle theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <select id="currency-selector" class="control-select">
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="CAD">CAD (C$)</option>
+                        <option value="AUD">AUD (A$)</option>
+                    </select>
+                </div>
+            </div>
+            <h1>HardwarePlanner</h1>
+            <p class="subtitle">Plan your dream PC build and track component costs</p>
+        </div>
+        
+        <div class="stats-bar">
+            <div class="stat-item">
+                <i class="fas fa-microchip"></i>
+                <span>Components: <span id="component-count">0</span></span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-dollar-sign"></i>
+                <span>Total: <span class="currency">$</span><span id="total-price">0.00</span></span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-chart-line"></i>
+                <span id="progress-text">0% Complete</span>
+            </div>
+        </div>
+        
+        <div class="progress-section">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="build-progress"></div>
+            </div>
+        </div>
+        
+        <div class="build-management">
+            <div class="build-controls">
+                <select id="build-selector" class="build-select"></select>
+                <button onclick="createNewBuild()" class="control-btn" title="New build">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button onclick="deleteBuild()" class="control-btn" title="Delete build">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button onclick="exportBuild()" class="control-btn" title="Export builds (JSON)">
+                    <i class="fas fa-download"></i>
+                </button>
+                <button onclick="importBuild()" class="control-btn" title="Import builds (JSON)">
+                    <i class="fas fa-upload"></i>
+                </button>
+                <button onclick="showImportJsonModal()" class="control-btn" title="Import from JSON Code">
+                    <i class="fas fa-code"></i>
+                </button>
+            </div>
+            <div class="budget-controls">
+                <label for="budget-input">Budget Limit:</label>
+                <div class="budget-input-group">
+                    <span class="currency">$</span>
+                    <input type="number" id="budget-input" placeholder="0.00" onchange="setBudget()">
+                </div>
+            </div>
+        </div>
+        
+        <div id="budget-alert" class="budget-alert" style="display: none;"></div>
+        
+        <div class="parts-section">
+            <div class="section-header">
+                <h2><i class="fas fa-list"></i> Components</h2>
+                <div class="section-controls">
+                    <button onclick="showTemplateModal()" class="control-btn" title="Load template">
+                        <i class="fas fa-layer-group"></i> Templates
+                    </button>
+                    <button onclick="showComparisonModal()" class="control-btn" title="Compare components">
+                        <i class="fas fa-balance-scale"></i> Compare
+                    </button>
+                    <button onclick="validateBuild()" class="control-btn" title="Validate build">
+                        <i class="fas fa-check-circle"></i> Validate
+                    </button>
+                    <button class="add-part-btn" onclick="addPart()">
+                        <i class="fas fa-plus"></i> Add Component
+                    </button>
+                </div>
+            </div>
+            
+            <div id="validation-results" class="validation-results"></div>
+            
+            <div class="parts-table">
+                <div class="table-header">
+                    <div class="col-drag"></div>
+                    <div class="col-category">Category</div>
+                    <div class="col-component">Component</div>
+                    <div class="col-link">Product Link</div>
+                    <div class="col-price">Price</div>
+                    <div class="col-purchased">Purchased</div>
+                    <div class="col-actions">Actions</div>
+                </div>
+                
+                <div id="parts-container" class="parts-list">
+                    <!-- Parts will be added here -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="total-section">
+            <div class="total-card">
+                <div class="total-icon">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <div class="total-content">
+                    <div class="total-label">Total Build Cost</div>
+                    <div class="total-amount"><span class="currency">$</span><span id="total-display">0.00</span></div>
+                </div>
+            </div>
+            <div class="export-section">
+                <button onclick="showExportModal()" class="export-btn">
+                    <i class="fas fa-download"></i> My System is Ready
+                </button>
+            </div>
+        </div>
+        
+        <div class="empty-state" id="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-plus-circle"></i>
+            </div>
+            <h3>Start Building Your PC</h3>
+            <p>Add your first component to begin planning your build</p>
+            <div class="empty-actions">
+                <button class="add-first-btn" onclick="addPart()">
+                    <i class="fas fa-plus"></i> Add First Component
+                </button>
+                <button class="template-btn" onclick="showTemplateModal()">
+                    <i class="fas fa-layer-group"></i> Use Template
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Modal -->
+    <div id="template-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-layer-group"></i> Build Templates</h2>
+                <button class="close-btn" onclick="closeTemplateModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose from pre-configured builds to get started quickly:</p>
+                <div id="template-cards" class="template-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparison-modal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2><i class="fas fa-balance-scale"></i> Component Comparison</h2>
+                <button class="close-btn" onclick="closeComparisonModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="comparison-controls">
+                    <label for="comparison-category">Category:</label>
+                    <select id="comparison-category" onchange="updateComparisonComponents()">
+                        <option value="CPU">CPU</option>
+                        <option value="GPU">GPU</option>
+                        <option value="RAM">RAM</option>
+                        <option value="Motherboard">Motherboard</option>
+                        <option value="Storage">Storage</option>
+                        <option value="PSU">PSU</option>
+                        <option value="Case">Case</option>
+                        <option value="Cooler">Cooler</option>
+                    </select>
+                </div>
+                <div id="comparison-components" class="comparison-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Price History Modal -->
+    <div id="price-history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-chart-line"></i> Price History</h2>
+                <button class="close-btn" onclick="closePriceHistoryModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <h3 id="price-history-component"></h3>
+                <div id="price-history-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2><i class="fas fa-download"></i> Export Build Plan</h2>
+                <button class="close-btn" onclick="closeExportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose your export format:</p>
+                <div class="export-options">
+                    <button onclick="exportToPDF()" class="export-option-btn pdf">
+                        <i class="fas fa-file-pdf"></i>
+                        <span>Export as PDF</span>
+                        <small>Printable document</small>
+                    </button>
+                    <button onclick="exportToPNG()" class="export-option-btn png">
+                        <i class="fas fa-image"></i>
+                        <span>Export as PNG</span>
+                        <small>Image format</small>
+                    </button>
+                    <button onclick="showJsonExportModal()" class="export-option-btn json">
+                        <i class="fas fa-code"></i>
+                        <span>Export as JSON Code</span>
+                        <small>Shareable code</small>
+                    </button>
+                </div>
+                
+                <h3>Build Summary:</h3>
+                <div id="export-preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Export Modal -->
+    <div id="json-export-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-code"></i> Export as JSON Code</h2>
+                <button class="close-btn" onclick="closeJsonExportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Copy this code to share your build or save it as backup:</p>
+                <div class="json-code-container">
+                    <textarea id="json-export-code" readonly rows="8"></textarea>
+                    <button onclick="copyJsonCode()" class="copy-btn">
+                        <i class="fas fa-copy"></i> Copy Code
+                    </button>
+                </div>
+                <div class="json-help">
+                    <h4><i class="fas fa-info-circle"></i> How to use:</h4>
+                    <ul>
+                        <li>Copy the code above</li>
+                        <li>Share it with others or save it as backup</li>
+                        <li>Use "Import JSON Code" button to restore the build</li>
+                        <li>Code contains all build data including purchase status</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Import Modal -->
+    <div id="json-import-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-code"></i> Import from JSON Code</h2>
+                <button class="close-btn" onclick="closeJsonImportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Paste the JSON code to import a build:</p>
+                <div class="json-code-container">
+                    <textarea id="json-import-code" placeholder="Paste your JSON code here..." rows="8"></textarea>
+                    <button onclick="importFromJson()" class="import-btn">
+                        <i class="fas fa-upload"></i> Import Build
+                    </button>
+                </div>
+                <div class="json-help">
+                    <h4><i class="fas fa-info-circle"></i> Instructions:</h4>
+                    <ul>
+                        <li>Paste the complete JSON code in the text area above</li>
+                        <li>Click "Import Build" to create the build</li>
+                        <li>All components and settings will be restored</li>
+                        <li>The build will be added to your build list</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
