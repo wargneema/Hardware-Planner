@@ -27,6 +27,7 @@
                         <option value="GBP">GBP (£)</option>
                         <option value="CAD">CAD (C$)</option>
                         <option value="AUD">AUD (A$)</option>
+                        <option value="TRY">TRY (₺)</option>
                     </select>
                 </div>
             </div>
@@ -58,6 +59,9 @@
         <div class="build-management">
             <div class="build-controls">
                 <select id="build-selector" class="build-select"></select>
+                <button onclick="renameBuild()" class="control-btn" title="Rename build">
+                    <i class="fas fa-edit"></i>
+                </button>
                 <button onclick="createNewBuild()" class="control-btn" title="New build">
                     <i class="fas fa-plus"></i>
                 </button>

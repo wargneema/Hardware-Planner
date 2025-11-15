@@ -137,7 +137,8 @@ const currencyRates = {
     'EUR': 0.85,
     'GBP': 0.73,
     'CAD': 1.25,
-    'AUD': 1.35
+    'AUD': 1.35,
+    'TRY': 32.5
 };
 
 const currencySymbols = {
@@ -145,7 +146,8 @@ const currencySymbols = {
     'EUR': '€',
     'GBP': '£',
     'CAD': 'C$',
-    'AUD': 'A$'
+    'AUD': 'A$',
+    'TRY': '₺'
 };
 
 // Initialize the application
@@ -208,7 +210,7 @@ function loadCurrentBuild() {
 function saveCurrentBuild() {
     const parts = [];
     const partRows = document.querySelectorAll('.part-row');
-    
+
     partRows.forEach(row => {
         const category = row.querySelector('.category-select').value;
         const name = row.querySelector('.component-input input').value;
@@ -217,12 +219,15 @@ function saveCurrentBuild() {
         const purchased = row.querySelector('.purchased-checkbox input').checked;
         const noteElement = row.querySelector('.component-note');
         const note = noteElement ? noteElement.textContent.replace('📝 ', '') : '';
-        
+
+        const partId = row.dataset.partId;
+        const parentId = row.dataset.parentId;
+
         if (name || link || price) {
-            parts.push({ category, name, link, price, purchased, note });
+            parts.push({ category, name, link, price, purchased, note, partId, parentId });
         }
     });
-    
+
     builds[currentBuildIndex].parts = parts;
     saveToStorage();
 }
@@ -236,6 +241,19 @@ function createNewBuild() {
         loadCurrentBuild();
         updateBuildSelector();
         saveToStorage();
+    }
+}
+
+function renameBuild() {
+    if (builds.length === 0) return;
+
+    const currentName = builds[currentBuildIndex].name;
+    const newName = prompt('Enter new build name:', currentName);
+    if (newName && newName.trim() !== currentName) {
+        builds[currentBuildIndex].name = newName.trim();
+        updateBuildSelector();
+        saveToStorage();
+        showNotification(`Build renamed to "${newName}"`, 'success');
     }
 }
 
@@ -881,20 +899,26 @@ function updateExportPreview() {
     let purchasedCount = 0;
     let purchasedTotal = 0;
     
+    // Get all parts including options
+    const allParts = getAllPartsWithOptions();
+
     // Summary cards
     let summaryHTML = `
         <div class="export-summary">
             <div class="summary-grid">
     `;
-    
-    // Calculate totals first
-    parts.forEach(part => {
-        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
+
+    // Calculate totals first - only include main components in total
+    allParts.forEach(part => {
+        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row =>
             row.querySelector('.component-input input').value === part.name
         );
         const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
-        
-        totalPrice += part.price;
+
+        // Only include non-option parts in total price
+        if (!part.parentId) {
+            totalPrice += part.price;
+        }
         if (isPurchased) {
             purchasedCount++;
             purchasedTotal += part.price;
@@ -949,27 +973,29 @@ function updateExportPreview() {
                 </thead>
                 <tbody>
     `;
-    
-    parts.forEach(part => {
-        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
+
+    allParts.forEach(part => {
+        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row =>
             row.querySelector('.component-input input').value === part.name
         );
-        
+
         const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
         const link = partRow ? partRow.querySelector('.link-input input').value : '';
         const websiteName = link ? new URL(link).hostname.replace('www.', '') : 'N/A';
-        
-        const statusBadge = isPurchased 
+
+        const statusBadge = isPurchased
             ? '<span class="status-badge purchased">✅ Purchased</span>'
             : '<span class="status-badge pending">❌ Pending</span>';
-            
+
         const categoryBadge = `<span class="category-badge ${part.category.toLowerCase()}">${part.category}</span>`;
-        
+        const componentTypeBadge = part.isOption ? '<span class="component-type-badge option">OPTION</span>' : '<span class="component-type-badge main">MAIN</span>';
+
         tableHTML += `
-            <tr class="${isPurchased ? 'purchased-row' : ''}">
+            <tr class="${isPurchased ? 'purchased-row' : ''} ${part.isOption ? 'option-row' : 'main-row'}">
                 <td class="col-category">${categoryBadge}</td>
                 <td class="col-component">
                     <div class="component-name">${part.name}</div>
+                    ${componentTypeBadge}
                 </td>
                 <td class="col-website">
                     ${link ? `<a href="${link}" target="_blank" class="website-link">${websiteName}</a>` : '<span class="no-link">N/A</span>'}
@@ -994,74 +1020,48 @@ function updateExportPreview() {
 function exportToPDF() {
     const printWindow = window.open('', '_blank');
     const buildName = builds[currentBuildIndex].name;
-    const parts = getCurrentBuildParts();
-    
+    const allParts = getAllPartsWithOptions();
+    const mainParts = allParts.filter(part => !part.parentId);
+
     let totalPrice = 0;
     let purchasedCount = 0;
     let purchasedTotal = 0;
-    
-    // Calculate totals and create table rows (same as PNG)
-    let tableRows = '';
-    parts.forEach(part => {
-        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
-            row.querySelector('.component-input input').value === part.name
-        );
-        
-        const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
-        const link = partRow ? partRow.querySelector('.link-input input').value : '';
-        const websiteName = link ? new URL(link).hostname.replace('www.', '') : 'N/A';
-        
-        totalPrice += part.price;
-        if (isPurchased) {
+
+    // Calculate totals - only main components in total price
+    allParts.forEach(part => {
+        if (!part.parentId) { // Only main components
+            totalPrice += part.price;
+        }
+        if (part.purchased) {
             purchasedCount++;
             purchasedTotal += part.price;
         }
-        
-        const statusBadge = isPurchased 
-            ? '<span class="status-badge purchased">✅ Purchased</span>'
-            : '<span class="status-badge pending">❌ Pending</span>';
-            
-        const categoryBadge = `<span class="category-badge ${part.category.toLowerCase()}">${part.category}</span>`;
-        
-        tableRows += `
-            <tr class="${isPurchased ? 'purchased-row' : ''}">
-                <td>${categoryBadge}</td>
-                <td><strong>${part.name}</strong></td>
-                <td>${link ? `<a href="${link}" target="_blank">${websiteName}</a>` : '<span class="no-link">N/A</span>'}</td>
-                <td><strong class="price-amount">${formatCurrency(part.price)}</strong></td>
-                <td>${statusBadge}</td>
-            </tr>
-        `;
     });
-    
-    // Create table rows
+
+    // Create table rows for all parts (including options)
     let pdfTableRows = '';
-    parts.forEach(part => {
-        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
+    allParts.forEach(part => {
+        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row =>
             row.querySelector('.component-input input').value === part.name
         );
-        
+
         const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
         const link = partRow ? partRow.querySelector('.link-input input').value : '';
         const websiteName = link ? new URL(link).hostname.replace('www.', '') : 'N/A';
-        
-        if (isPurchased) {
-            purchasedCount++;
-            purchasedTotal += part.price;
-        }
-        totalPrice += part.price;
-        
+
         const statusIcon = isPurchased ? '✅' : '❌';
         const statusText = isPurchased ? 'Purchased' : 'Not Purchased';
         const rowClass = isPurchased ? 'purchased-row' : '';
-        
+
+        let componentName = part.name;
+
         pdfTableRows += `
-            <tr class="${rowClass}">
+            <tr class="${rowClass} ${part.isOption ? 'option-row' : 'main-row'}">
                 <td class="category-cell">
                     <div class="category-badge ${part.category.toLowerCase()}">${part.category}</div>
                 </td>
                 <td class="component-cell">
-                    <strong>${part.name}</strong>
+                    <strong>${componentName}</strong>
                 </td>
                 <td class="website-cell">
                     ${link ? `<a href="${link}" target="_blank">${websiteName}</a>` : 'N/A'}
@@ -1077,7 +1077,7 @@ function exportToPDF() {
             </tr>
         `;
     });
-    
+
     let htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -1085,15 +1085,15 @@ function exportToPDF() {
             <title>${buildName} - PC Build Plan</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { 
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                    line-height: 1.4; 
-                    color: #333; 
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.4;
+                    color: #333;
                     background: #f8f9fa;
                     padding: 15px;
                     font-size: 12px;
                 }
-                
+
                 .container {
                     max-width: 100%;
                     margin: 0 auto;
@@ -1102,25 +1102,25 @@ function exportToPDF() {
                     overflow: hidden;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                 }
-                
+
                 .header {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
                     padding: 20px;
                     text-align: center;
                 }
-                
+
                 .header h1 {
                     font-size: 1.8rem;
                     margin-bottom: 5px;
                     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
                 }
-                
+
                 .header p {
                     font-size: 0.9rem;
                     opacity: 0.9;
                 }
-                
+
                 .summary-grid {
                     display: grid;
                     grid-template-columns: repeat(4, 1fr);
@@ -1128,7 +1128,7 @@ function exportToPDF() {
                     padding: 15px;
                     background: #f8f9fa;
                 }
-                
+
                 .summary-card {
                     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
                     border: 1px solid #dee2e6;
@@ -1139,7 +1139,7 @@ function exportToPDF() {
                     gap: 8px;
                     box-shadow: 0 1px 5px rgba(0,0,0,0.1);
                 }
-                
+
                 .summary-icon {
                     font-size: 1.2rem;
                     width: 30px;
@@ -1151,21 +1151,21 @@ function exportToPDF() {
                     border-radius: 50%;
                     box-shadow: 0 1px 5px rgba(0,0,0,0.1);
                 }
-                
+
                 .summary-value {
                     font-size: 1rem;
                     font-weight: bold;
                     color: #2c3e50;
                     margin-bottom: 2px;
                 }
-                
+
                 .summary-label {
                     font-size: 0.7rem;
                     color: #6c757d;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
                 }
-                
+
                 .components-table {
                     background: white;
                     border-radius: 6px;
@@ -1174,12 +1174,12 @@ function exportToPDF() {
                     border: 1px solid #e9ecef;
                     margin: 15px;
                 }
-                
+
                 table {
                     width: 100%;
                     border-collapse: collapse;
                 }
-                
+
                 th {
                     background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
                     color: white;
@@ -1190,18 +1190,31 @@ function exportToPDF() {
                     font-size: 0.7rem;
                     letter-spacing: 0.3px;
                 }
-                
+
                 td {
                     padding: 6px 4px;
                     border-bottom: 1px solid #f1f3f4;
                     vertical-align: middle;
                     font-size: 0.8rem;
                 }
-                
+
                 .purchased-row {
                     background: #d4edda;
                 }
-                
+
+                .option-row {
+                    background: linear-gradient(135deg, #e7f3ff 0%, #f8fbff 100%);
+                    border-left: 3px solid #17a2b8;
+                    border-radius: 6px 0 0 6px;
+                }
+
+                .option-row .component-cell:before {
+                    content: "🔸 OPTION: ";
+                    font-weight: bold;
+                    color: #17a2b8;
+                    font-size: 0.8rem;
+                }
+
                 .category-badge {
                     display: inline-block;
                     padding: 3px 6px;
@@ -1212,7 +1225,7 @@ function exportToPDF() {
                     color: white;
                     letter-spacing: 0.3px;
                 }
-                
+
                 .category-badge.cpu { background: linear-gradient(135deg, #e74c3c, #c0392b); }
                 .category-badge.gpu { background: linear-gradient(135deg, #3498db, #2980b9); }
                 .category-badge.ram { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
@@ -1222,13 +1235,13 @@ function exportToPDF() {
                 .category-badge.case { background: linear-gradient(135deg, #34495e, #2c3e50); }
                 .category-badge.cooler { background: linear-gradient(135deg, #1abc9c, #16a085); }
                 .category-badge.other { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
-                
+
                 .price-amount {
                     font-weight: bold;
                     font-size: 0.9rem;
                     color: #27ae60;
                 }
-                
+
                 .status-badge {
                     display: inline-block;
                     padding: 3px 6px;
@@ -1237,39 +1250,39 @@ function exportToPDF() {
                     font-weight: 600;
                     letter-spacing: 0.2px;
                 }
-                
+
                 .status-badge.purchased {
                     background: linear-gradient(135deg, #d4edda, #c3e6cb);
                     color: #155724;
                     border: 1px solid #c3e6cb;
                 }
-                
+
                 .status-badge.pending {
                     background: linear-gradient(135deg, #fff3cd, #ffeaa7);
                     color: #856404;
                     border: 1px solid #ffeaa7;
                 }
-                
+
                 .no-link {
                     color: #6c757d;
                     font-style: italic;
                 }
-                
+
                 .footer {
                     text-align: center;
                     padding: 30px;
                     color: #6c757d;
                     font-size: 1rem;
                 }
-                
+
                 @media print {
-                    body { 
-                        background: white; 
-                        padding: 0; 
+                    body {
+                        background: white;
+                        padding: 0;
                         font-size: 10px;
                     }
-                    .container { 
-                        box-shadow: none; 
+                    .container {
+                        box-shadow: none;
                         max-width: 100%;
                         margin: 0;
                     }
@@ -1308,18 +1321,18 @@ function exportToPDF() {
             <div class="container">
                 <div class="header">
                     <h1>${buildName}</h1>
-                    <p>PC Build Plan - ${new Date().toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
+                    <p>PC Build Plan - ${new Date().toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
                     })}</p>
                 </div>
-                
+
                 <div class="summary-grid">
                     <div class="summary-card">
                         <div class="summary-icon">📦</div>
                         <div class="summary-info">
-                            <div class="summary-value">${parts.length}</div>
+                            <div class="summary-value">${mainParts.length}</div>
                             <div class="summary-label">Components</div>
                         </div>
                     </div>
@@ -1333,8 +1346,8 @@ function exportToPDF() {
                     <div class="summary-card">
                         <div class="summary-icon">✅</div>
                         <div class="summary-info">
-                            <div class="summary-value">${purchasedCount}/${parts.length}</div>
-                            <div class="summary-label">Purchased</div>
+                            <div class="summary-value">${purchasedCount}/${mainParts.length + allParts.filter(p => p.parentId).length}</div>
+                            <div class="summary-label">Items</div>
                         </div>
                     </div>
                     <div class="summary-card">
@@ -1345,7 +1358,7 @@ function exportToPDF() {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="components-table">
                     <table>
                         <thead>
@@ -1362,7 +1375,7 @@ function exportToPDF() {
                         </tbody>
                     </table>
                 </div>
-                
+
                 <div class="footer">
                     🖥️ Generated by PC Build Planner
                 </div>
@@ -1407,9 +1420,16 @@ function exportToPNG() {
     const summaryHeight = 80;
     const footerHeight = 60;
     const padding = 40;
-    
+
     canvas.width = 1000;
-    canvas.height = headerHeight + summaryHeight + (parts.length * rowHeight) + footerHeight + (padding * 2);
+    // Cap the height to prevent canvas size issues with many components
+    const maxRows = 25; // Limit to reasonable size for PNG generation
+    const usedRows = Math.min(parts.length, maxRows);
+    canvas.height = headerHeight + summaryHeight + (usedRows * rowHeight) + footerHeight + (padding * 2);
+
+    const partsToShow = parts.slice(0, maxRows);
+
+    // If we truncated parts, we'll note this at the bottom
     
     // Gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -1494,39 +1514,52 @@ function exportToPNG() {
     
     currentY += 35;
     
+    // If we truncated parts, we'll note this at the bottom
+    if (parts.length > maxRows) {
+        const countText = `Showing first ${maxRows} of ${parts.length} components`;
+        ctx.fillStyle = '#6c757d';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(countText, canvas.width / 2, currentY + 60);
+    }
+
     // Table rows
-    parts.forEach((part, index) => {
-        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
+    partsToShow.forEach((part, index) => {
+        const partRow = Array.from(document.querySelectorAll('.part-row')).find(row =>
             row.querySelector('.component-input input').value === part.name
         );
-        
+
         const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
         const link = partRow ? partRow.querySelector('.link-input input').value : '';
         const websiteName = link ? new URL(link).hostname.replace('www.', '') : 'N/A';
-        
-        // Row background
-        ctx.fillStyle = isPurchased ? '#d4edda' : (index % 2 === 0 ? '#f8f9fa' : '#ffffff');
+        const isOption = partRow ? partRow.classList.contains('option-row') : false;
+
+        // Row background - different for options
+        ctx.fillStyle = isOption ? '#e7f3ff' : (isPurchased ? '#d4edda' : (index % 2 === 0 ? '#f8f9fa' : '#ffffff'));
         ctx.fillRect(padding + 20, currentY, canvas.width - (padding * 2) - 40, rowHeight);
-        
+
         // Row border
         ctx.strokeStyle = '#e9ecef';
         ctx.lineWidth = 1;
         ctx.strokeRect(padding + 20, currentY, canvas.width - (padding * 2) - 40, rowHeight);
-        
+
         // Row content
         ctx.fillStyle = '#2c3e50';
         ctx.font = '12px Arial';
         ctx.textAlign = 'left';
-        
+
         colX = padding + 30;
+
+        let componentName = part.name;
+
         const rowData = [
             part.category,
-            part.name.length > 35 ? part.name.substring(0, 32) + '...' : part.name,
+            componentName.length > 35 ? componentName.substring(0, 32) + '...' : componentName,
             websiteName.length > 25 ? websiteName.substring(0, 22) + '...' : websiteName,
             formatCurrency(part.price),
             isPurchased ? '✅ Purchased' : '❌ Pending'
         ];
-        
+
         rowData.forEach((data, colIndex) => {
             if (colIndex === 3) { // Price column
                 ctx.fillStyle = '#27ae60';
@@ -1538,11 +1571,11 @@ function exportToPNG() {
                 ctx.fillStyle = '#2c3e50';
                 ctx.font = '12px Arial';
             }
-            
+
             ctx.fillText(data, colX, currentY + 22);
             colX += colWidths[colIndex];
         });
-        
+
         currentY += rowHeight;
     });
     
@@ -1864,18 +1897,19 @@ function getDragAfterElement(container, y) {
 
 // Calculations and updates
 function updateTotal() {
-    const priceInputs = document.querySelectorAll('.col-price input[type="number"]');
+    // Only include price inputs from non-option rows
+    const priceInputs = document.querySelectorAll('.part-row:not(.option-row) .col-price input[type="number"]');
     let total = 0;
-    
+
     priceInputs.forEach(input => {
         const value = parseFloat(input.value) || 0;
         total += value;
     });
-    
+
     const formattedTotal = formatCurrency(total);
     document.getElementById('total-price').textContent = formattedTotal;
     document.getElementById('total-display').textContent = formattedTotal;
-    
+
     updateBuildProgress();
 }
 
@@ -1917,24 +1951,7 @@ function updateBuildProgress() {
 
 // Currency and budget functions
 function changeCurrency(newCurrency) {
-    const oldRate = currencyRates[currency];
-    const newRate = currencyRates[newCurrency];
-    
-    // Convert all prices
-    document.querySelectorAll('.price-input input').forEach(input => {
-        if (input.value) {
-            const oldPrice = parseFloat(input.value);
-            const newPrice = (oldPrice / oldRate) * newRate;
-            input.value = newPrice.toFixed(2);
-        }
-    });
-    
-    // Convert budget limit
-    if (budgetLimit > 0) {
-        budgetLimit = (budgetLimit / oldRate) * newRate;
-        document.getElementById('budget-input').value = budgetLimit.toFixed(2);
-    }
-    
+    // Don't convert prices, just change the currency symbol
     currency = newCurrency;
     updateCurrencyDisplay();
     updateTotal();
@@ -2036,32 +2053,51 @@ function importBuild() {
     input.click();
 }
 
+function getAllPartsWithOptions() {
+    const parts = [];
+    const partRows = document.querySelectorAll('.part-row');
+
+    partRows.forEach(row => {
+        const category = row.querySelector('.category-select').value;
+        const name = row.querySelector('.component-input input').value;
+        const link = row.querySelector('.link-input input').value;
+        const price = parseFloat(row.querySelector('.price-input input').value) || 0;
+        const purchased = row.querySelector('.purchased-checkbox input').checked;
+        const noteElement = row.querySelector('.component-note');
+        const note = noteElement ? noteElement.textContent.replace('📝 ', '') : '';
+        const partId = row.dataset.partId;
+        const parentId = row.dataset.parentId;
+
+        if (name || link || price) {
+            parts.push({
+                category, name, link, price, purchased, note, partId, parentId,
+                isOption: !!parentId  // Add flag for UI display
+            });
+        }
+    });
+
+    return parts;
+}
+
 // JSON Export Functions
 function showJsonExportModal() {
     const modal = document.getElementById('json-export-modal');
-    const parts = getCurrentBuildParts();
-    
-    // Create exportable build data
+    const allParts = getAllPartsWithOptions();
+
+    // Create exportable build data including all components and options
     const exportData = {
         buildName: builds[currentBuildIndex].name,
-        parts: parts.map(part => {
-            const partRow = Array.from(document.querySelectorAll('.part-row')).find(row => 
-                row.querySelector('.component-input input').value === part.name
-            );
-            const isPurchased = partRow ? partRow.querySelector('.purchased-checkbox input').checked : false;
-            const link = partRow ? partRow.querySelector('.link-input input').value : '';
-            const noteElement = partRow ? partRow.querySelector('.component-note') : null;
-            const note = noteElement ? noteElement.textContent.replace('📝 ', '') : '';
-            
-            return {
-                category: part.category,
-                name: part.name,
-                price: part.price,
-                link: link,
-                purchased: isPurchased,
-                note: note
-            };
-        }),
+        parts: allParts.map(part => ({
+            category: part.category,
+            name: part.name,
+            price: part.price,
+            link: part.link,
+            purchased: part.purchased,
+            note: part.note,
+            partId: part.partId,
+            parentId: part.parentId,
+            isOption: part.isOption
+        })),
         exportDate: new Date().toISOString(),
         currency: currency,
         version: '1.0'
